@@ -31,7 +31,7 @@ mtcars$am <- as.factor(mtcars$am)
 levels(mtcars$am) <- c("Automatic", "Manual")
 ```
 
-# Expoloratory Analysis
+# Exploratory Analysis
 
 ```{r "t.test", echo=FALSE}
 test.1 <- t.test(mtcars$mpg ~ mtcars$am)
