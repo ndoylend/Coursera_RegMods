@@ -1,0 +1,193 @@
+---
+title: "Regression Models: Assignment"
+author: "ND"
+date: "24/10/2014"
+output:
+  pdf_document:
+    fig_caption: yes
+    fig_width: 4.0
+documentclass: article
+classoption: a4paper
+---
+
+# Executive Summary
+
+When considering fuel efficiency (mpg) and transmission type (automatic or manual) alone, i.e. without accounting for other variables, the manual transmission cars in the `mtcars` data set are, on average, 7 mpg more efficient than the automatics. This does not necessarily mean manual transmission cars are more efficient as there are other variables such as weight and power that must be accounted for.
+
+It's worth bearing in mind that the cars in the data set are 1973-1974 models. Since automatic transmission technology will have improved since then, a similar analysis on modern cars may show less of a difference between transmission types.
+
+# Introduction
+
+Much of the R code in this document has been hidden to aid readability. The full R markdown source for this document can be found in my [github repository](https://github.com/ndoylend/Coursera_RegMods). The first step in the analysis is to load the data, convert binary or categorical variables to factor variables, and then assign meaningful factor names.
+
+```{r "load", echo=FALSE}
+# Load the relevant data set
+data(mtcars)
+
+# Convert binary or categorical variables to factor variables
+mtcars$am <- as.factor(mtcars$am)
+
+# Assign meaningful level names
+levels(mtcars$am) <- c("Automatic", "Manual")
+```
+
+# Expoloratory Analysis
+
+Once the data has been loaded the data can be inspected for patterns. The pairwise relationship between the data variables is shown in the scatterplot matrix (appendix 1, fig. 2). The relationship of interest is that between fuel efficiency (mpg) and transmission type (am). The boxplot (fig. 1) shows a clear difference between the median mpg for automatic and manual transmission types.
+
+```{r "boxplot", echo=FALSE, fig.cap="Boxplot for MPG by transmission type"}
+boxplot(mtcars$mpg ~ mtcars$am)
+```
+
+```{r "t.test", echo=FALSE}
+test.1 <- t.test(mtcars$mpg ~ mtcars$am)
+```
+
+The normal q-q plots (appendix 1, fig. 3) show that the mpg of automatic and manual transmission cars in the data set is approximately normally distributed. The Welch Two Sample t-test suggests a significant difference between the means of the two groups (P = `r sprintf("%0.4f", test.1$p.value)`, two sided).
+
+# Simple Model
+
+```{r "mSimple", echo=FALSE}
+mSimple <- lm(mpg ~ am, data = mtcars)
+#summary(mSimple)
+```
+
+The relationship shown above can be expressed as a simple linear model `mpg ~ am`. This model results in an intercept of `r sprintf("%0.3f", mSimple$coefficients[1])`, which corresponds to the mean mpg of the reference group (automatic). The second coefficient, `r sprintf("%0.3f", mSimple$coefficients[2])` corresponds to the increase in mean of the manual group compared to the reference group. This result is not surprising considering the obvious difference between the boxplots and the statistically significant difference between the two means. The simple model however only accounts for `r sprintf("%0.1f", summary(mSimple)$r.squared * 100)`% of the variation in mpg, and has a residual sum of squares of  `r sprintf("%0.2f", tail((anova(mSimple))["Sum Sq"],n = 1))`. This is not particularly surprising as the scatterplot matrix (appendix 1, fig. 2) shows mpg to be influenced by a range of variables besides transmission type.
+
+# Full Model
+
+```{r "mFull", echo=FALSE}
+mFull <- lm(mpg ~ ., data = mtcars)
+#summary(mFull)
+```
+
+A linear model of the form `mpg ~ .` adds terms for every variable in the data set. After throwing every predictor variable into the model, it now accounts for `r sprintf("%0.1f", summary(mFull)$r.squared * 100)`% of the variation in mpg. When considering multiple variate regression the adjusted R^2^ can be used to provide a better indication of explanatory power (as R^2^ will increase for every predictor added to the model, regardless of the model's explanatory power). The adjusted R^2^ for the full model is `r sprintf("%0.3f", summary(mFull)$adj.r.squared)`. The values of the beta coefficients represent the change in response variable to a unit change in the relevant predictor variable, given the other variables are held constant. The magnitude of the values themselves depend on the measurement unit and therefore are not a reliable indication of correlation strength. The t-values and associated p-values indicate the significance of the effect. The most significant coefficient is weight (wt), with a p-value of `r sprintf("%0.4f", summary(mFull)$coefficients["wt",4])`, followed by transmission type (am), acceleration (qsec) and engine power (hp).
+
+# Stepwise Regression
+
+```{r "mStepF", echo=FALSE}
+mStepF <- step(mSimple, direction="forward", trace = 0, 
+               scope=(~ cyl + disp + hp + drat + wt + qsec + vs + am + gear + carb))
+#summary(mStepF)
+```
+
+```{r "mStepB", echo=FALSE}
+mStepB <- step(mFull, direction = "backward", trace = 0)
+#summary(mStepB)
+```
+
+Stepwise regression uses an automatic procedure for choosing predictor variables on the basis of AIC, which evaluates the trade-off between model fit and complexity. The forwards stepwise regression starts with the simple model and results in the model `mpg ~ am + hp + wt + qsec`. The adjusted R^2^ for the forward stepwise model is `r sprintf("%0.3f", summary(mStepF)$adj.r.squared)`. The backwards stepwise regression starts with the full model and results in the model `mpg ~ wt + qsec + am`.  The adjusted R^2^ for the backward stepwise model is `r sprintf("%0.3f", summary(mStepB)$adj.r.squared)`. The model `mpg ~ am + hp + wt + qsec`, from the forward stepwise has the highest adjusted R^2^ of the models considered so far. The four predictor variables in this model correspond to the four most significant coefficients in the full model. 
+
+# Interaction Terms
+
+The scatterplot matrix (appendix 1, fig. 2) shows that many of the data set variables are correlated. Appendix 1, fig. 4 illustrates the individual relationships between the three most significant additional variables. The weight plot shows that the automatic cars tend to be heavier than the manual cars. This may be a reason why the difference between automatic and manual varies according to weight, i.e. there is an interaction between weight and transmission type. The quarter mile time plot shows that automatic cars have a tendancy towards lower mpg than the manual cars. The difference increases as quarter mile time increases, i.e. there is also an interaction between quarter mile time and transmission type. The horsepower plot shows that accross the range of horsepower, the automatic cars have a consistent tendancy towards lower mpg than the manual cars, i.e there is no interaction between transmission type and horsepower.
+
+# Model Selection
+
+```{r "mInt", echo=FALSE}
+mInt <- lm(mpg ~ am + wt + qsec + am:wt, data = mtcars)
+```
+
+The final model was selected on the basis of the most significant variables in the full model, as confirmed by the stepwise regression. Since there is a clear interaction between weight and transmission type an interaction term `am:wt` was added to the model. This reduced the significance of the `hp` variable, which was removed from the model. The final model `mpg ~ am + wt + qsec + am:wt` has an adjusted R^2^ of `r sprintf("%0.3f", summary(mInt)$adj.r.squared)` and a residual sum of squares of `r sprintf("%0.2f", tail((anova(mInt))["Sum Sq"],n = 1))`.
+
+# Interpretation
+
+# Diagnostics
+Diagnostic plots (appendix 1, fig. 5)
+
+\pagebreak
+
+# Appendix 1: Plots
+
+## Scatterplot matrix
+
+```{r "pairs", echo=FALSE, fig.width=8, fig.height=8, fig.cap="Scatterplot matrix for the mtcars data set"}
+pairs(mtcars, panel = panel.smooth, main = "mtcars data", col = 3 + (mtcars$am == 0))
+```
+
+\pagebreak
+
+## Normal q-q plot
+
+```{r "qqplot", echo=FALSE, fig.cap='Normal q-q plot for MPG by transmission type', fig.width=8}
+par(mfrow = c(1,2)) # Setup a two column plot
+
+qqnorm(scale(mtcars$mpg[mtcars$am == "Automatic"]), main = "Automatic")
+abline(0,1)
+
+qqnorm(scale(mtcars$mpg[mtcars$am == "Manual"]), main = "Manual")
+abline(0,1)
+```
+
+\pagebreak
+
+## Individual iteractions
+
+```{r "interactions", echo=FALSE, fig.width=8, fig.height=8, fig.cap="Individual interactions"}
+par(mfrow = c(2, 2))
+
+with(mtcars[mtcars$am == "Automatic", ], {
+  plot(y = mpg, x = wt, col = "blue", main = "Effect of weight",
+       ylim = c(min(mtcars$mpg), max(mtcars$mpg)),
+       xlim = c(min(mtcars$wt), max(mtcars$wt)))
+  abline(lm(mpg ~ wt), col = "blue")
+  legend("topright", legend = c("Auto", "Man"), col = c("blue", "red"), lty = 1)
+})
+
+with(mtcars[mtcars$am == "Manual", ], {
+  points(y = mpg, x = wt, col = "red")
+  abline(lm(mpg ~ wt), col = "red")
+})
+
+with(mtcars[mtcars$am == "Automatic", ], {
+  plot(y = mpg, x = qsec, col = "blue", main = "Effect of quarter mile time",
+       ylim = c(min(mtcars$mpg), max(mtcars$mpg)),
+       xlim = c(min(mtcars$qsec), max(mtcars$qsec)))
+  abline(lm(mpg ~ qsec), col = "blue")
+  legend("topright", legend = c("Auto", "Man"), col = c("blue", "red"), lty = 1)
+})
+
+with(mtcars[mtcars$am == "Manual", ], {
+  points(y = mpg, x = qsec, col = "red")
+  abline(lm(mpg ~ qsec), col = "red")
+})
+
+with(mtcars[mtcars$am == "Automatic", ], {
+  plot(y = mpg, x = hp, col = "blue", main = "Effect of horsepower",
+       ylim = c(min(mtcars$mpg), max(mtcars$mpg)),
+       xlim = c(min(mtcars$hp), max(mtcars$hp)))
+  abline(lm(mpg ~ hp), col = "blue")
+  legend("topright", legend = c("Auto", "Man"), col = c("blue", "red"), lty = 1)
+})
+
+with(mtcars[mtcars$am == "Manual", ], {
+  points(y = mpg, x = hp, col = "red")
+  abline(lm(mpg ~ hp), col = "red")
+})
+```
+
+\pagebreak
+
+## Diagnostic plots
+
+```{r "diagnostics", echo=FALSE, fig.width=8, fig.height=8, fig.cap="Model diagnostics plots"}
+# Most influential beta
+#max(abs(dfbetas(mInt)))
+#which.max(abs(dfbetas(mInt))[, 2])
+
+par(mfrow = c(2, 2))
+plot(mInt)
+```
+
+\pagebreak
+
+# Appendix 2: Model Summaries
+
+```{r "summaries"}
+summary(mSimple)
+summary(mFull)
+summary(mStepF)
+summary(mStepB)
+summary(mInt)
+anova(mInt)
+```
